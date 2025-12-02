@@ -95,6 +95,7 @@
                 >
                   Disabling…
                 </v-btn>
+
               </div>
             </div>
 
@@ -467,21 +468,35 @@ const disableLoading = ref(false)
 
 const onDisableTwofa = async () => {
   disableLoading.value = true
-  try {
-    await useSanctumFetch('/auth/session/2fa/disable', {
-      method: 'POST',
-      body: {},
-    })
 
+  try {
+    // 🔹 Use the "options as function" signature to be 100% sure
+    const { error } = await useSanctumFetch(
+        '/auth/session/2fa/disable',
+        () => ({
+          method: 'POST',
+          // body optional here – Laravel side just uses the authenticated user
+        }),
+    )
+
+    // If backend returned a 4xx/5xx, surface it
+    if (error.value) {
+      console.error('Disable 2FA error:', error.value)
+      // You can make this nicer by wiring it into UiErrorAlert if you want:
+      // globalErrorMessage.value = error.value.data?.message ?? 'Failed to disable 2FA.'
+      return
+    }
+
+    // Reset local flows & refresh status so chips + buttons update
     resetEmailFlow()
     resetTotpFlow()
     await refreshTwofaStatus()
-  } catch (e: any) {
-    // surface as global error
-    // (could also use dedicated alert if you prefer)
-    console.error(e)
+  } catch (e) {
+    console.error('Disable 2FA unexpected error:', e)
+    // optional: show something in UiErrorAlert
   } finally {
     disableLoading.value = false
   }
 }
+
 </script>

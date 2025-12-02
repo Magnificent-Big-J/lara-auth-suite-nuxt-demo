@@ -12,7 +12,7 @@
       <v-card-text>
         <UiErrorAlert :message="formError" />
 
-        <v-form ref="formRef">
+        <v-form ref="formRef" @submit.prevent="submit">
           <v-text-field
               v-model="form.email"
               label="Email"
@@ -25,6 +25,7 @@
               class="mb-3"
               required
           />
+
           <v-text-field
               v-model="form.password"
               label="Password"
@@ -40,26 +41,25 @@
               required
           />
 
-
-          <div class="d-flex justify-end mb-1">
+          <div class="d-flex justify-end mb-3">
             <NuxtLink to="/auth/forgot-password" class="text-body-2">
               Forgot password?
             </NuxtLink>
           </div>
+
+          <v-btn
+              type="submit"
+              color="primary"
+              block
+              :loading="loading"
+              :disabled="loading"
+          >
+            Login
+          </v-btn>
         </v-form>
       </v-card-text>
 
       <v-card-actions class="flex-column align-stretch px-4 pb-4">
-        <v-btn
-            color="primary"
-            block
-            :loading="loading"
-            :disabled="loading"
-            @click="submit"
-        >
-          Login
-        </v-btn>
-
         <div class="text-caption text-medium-emphasis text-center mt-3">
           Don’t have an account?
           <NuxtLink to="/auth/register">
@@ -80,6 +80,9 @@ definePageMeta({
 })
 
 const { login } = useSanctumAuth()
+
+// shared 2FA status between pages
+const twoFactorState = useState<any>('twoFactorStatus', () => null)
 
 const formRef = ref()
 const loading = ref(false)
@@ -109,12 +112,57 @@ const submit = async () => {
   loading.value = true
 
   try {
+    // 1. normal Sanctum login → sets session cookie
     await login({
       email: form.email,
       password: form.password,
     })
 
-    await navigateTo('/')
+    // 2. ask LaraAuthSuite about 2FA status
+    const { data: statusRes } = await useSanctumFetch(
+        '/auth/session/2fa/status',
+        () => ({ method: 'GET' }),
+    )
+
+    const status = statusRes.value as any || {}
+
+    // adapt these keys to your actual response from /auth/session/2fa/status
+    const enabled =
+        status.enabled ??
+        status.is_enabled ??
+        status.two_factor_enabled ??
+        false
+
+    const verified =
+        status.verified ??
+        status.is_verified ??
+        status.two_factor_verified ??
+        false
+
+    const channel =
+        status.channel ??
+        status.default_channel ??
+        'email'
+
+    if (!enabled || verified) {
+      // 3.a no 2FA or already verified → go to app
+      const redirect = (useRoute().query.redirect as string) || '/'
+      await navigateTo(redirect)
+      return
+    }
+
+    // 3.b 2FA enabled and NOT verified → go to 2FA page
+    twoFactorState.value = {
+      email: form.email,
+      channel,
+      // include anything else from status you might need
+    }
+
+    const redirect = (useRoute().query.redirect as string) || '/'
+    await navigateTo({
+      path: '/auth/two-factor',
+      query: { redirect },
+    })
   } catch (e: any) {
     const data = e?.data as any
     formError.value =
@@ -132,7 +180,3 @@ const submit = async () => {
   }
 }
 </script>
-
-<style scoped>
-
-</style>
