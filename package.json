@@ -1,0 +1,29 @@
+{
+  "name": "ticket-frontend",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare"
+  },
+  "dependencies": {
+    "@mdi/font": "^7.4.47",
+    "@pinia/nuxt": "^0.11.3",
+    "chart.js": "^4.5.1",
+    "nuxt": "^4.2.1",
+    "nuxt-auth-sanctum": "^1.4.3",
+    "qrcode": "^1.5.4",
+    "vue": "^3.5.25",
+    "vue-chartjs": "^5.3.3",
+    "vue-router": "^4.6.3",
+    "vuetify": "^3.11.0",
+    "vuetify-nuxt-module": "^0.18.8"
+  },
+  "devDependencies": {
+    "sass": "^1.94.2",
+    "sass-loader": "^16.0.6"
+  }
+}
