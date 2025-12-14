@@ -511,7 +511,6 @@ const roleLabel = (value: string) => {
 }
 
 const normalizeRoles = (roles: any): string[] => {
-  console.log(roles)
   if (!roles) return []
   if (Array.isArray(roles)) {
     if (typeof roles[0] === 'string') return roles
