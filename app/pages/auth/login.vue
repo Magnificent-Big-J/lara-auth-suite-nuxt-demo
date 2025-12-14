@@ -25,6 +25,7 @@
               class="mb-3"
               required
           />
+
           <v-text-field
               v-model="form.password"
               label="Password"
@@ -39,7 +40,6 @@
               class="mb-1"
               required
           />
-
 
           <div class="d-flex justify-end mb-1">
             <NuxtLink to="/auth/forgot-password" class="text-body-2">
@@ -75,11 +75,12 @@
 import { reactive, ref } from 'vue'
 import UiErrorAlert from '@/components/ui/ErrorAlert.vue'
 
-definePageMeta({
-  layout: 'auth',
-})
+definePageMeta({ layout: 'auth' })
 
-const { login } = useSanctumAuth()
+// We still keep this for session bootstrap after successful login
+const { refreshUser } = useSanctumAuth()
+
+const baseURL = useRuntimeConfig().public.sanctum.baseUrl
 
 const formRef = ref()
 const loading = ref(false)
@@ -104,16 +105,60 @@ const resetErrors = () => {
   })
 }
 
+// ✅ tiny helper: read cookie in browser
+const getCookie = (name: string) => {
+  if (typeof document === 'undefined') return null
+  const value = `; ${document.cookie}`
+  const parts = value.split(`; ${name}=`)
+  if (parts.length < 2) return null
+  return parts.pop()!.split(';').shift() || null
+}
+
 const submit = async () => {
   resetErrors()
   loading.value = true
 
   try {
-    await login({
-      email: form.email,
-      password: form.password,
+    // 1) Get CSRF cookie (sets XSRF-TOKEN)
+    await $fetch('/sanctum/csrf-cookie', {
+      method: 'GET',
+      baseURL,
+      credentials: 'include',
     })
 
+    // 2) Read XSRF token cookie and pass it back as header
+    const xsrf = getCookie('XSRF-TOKEN')
+    if (!xsrf) {
+      throw { data: { message: 'Missing XSRF-TOKEN cookie after csrf-cookie call.' } }
+    }
+
+    const res: any = await $fetch('/auth/session/login', {
+      method: 'POST',
+      baseURL,
+      credentials: 'include',
+      headers: {
+        // Laravel expects the decoded token value
+        'X-XSRF-TOKEN': decodeURIComponent(xsrf),
+      },
+      body: {
+        email: form.email,
+        password: form.password,
+      },
+    })
+
+    // If your backend returns 2fa_required
+    if (res?.status === '2fa_required') {
+      const channel = res?.two_factor?.channel || 'email'
+
+      await navigateTo({
+        path: '/auth/verify',
+        query: { channel },
+      })
+      return
+    }
+
+    // Normal login
+    await refreshUser()
     await navigateTo('/')
   } catch (e: any) {
     const data = e?.data as any
@@ -132,7 +177,3 @@ const submit = async () => {
   }
 }
 </script>
-
-<style scoped>
-
-</style>
